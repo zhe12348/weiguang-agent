@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>情绪管理 AI · Web MVP</title>
+  <style>
+    :root {
+      --bg:#f5f7fb; --card:#fff; --text:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+      --brand:#4f46e5; --brand-soft:#eef2ff; --success:#16a34a; --danger:#dc2626;
+      --shadow:0 12px 28px rgba(15,23,42,.08);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+    .app { max-width:860px; margin:0 auto; padding:16px; display:flex; flex-direction:column; gap:14px; }
+    .topbar,.card,.page { background:var(--card); border:1px solid var(--line); border-radius:20px; box-shadow:var(--shadow); }
+    .topbar { padding:18px; }
+    .title { font-size:24px; font-weight:800; }
+    .sub { margin-top:8px; color:var(--muted); font-size:14px; line-height:1.6; }
+    .nav { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+    .nav button { background:var(--brand-soft); color:#3730a3; border:none; border-radius:999px; padding:8px 12px; cursor:pointer; }
+    .page { padding:18px; display:none; }
+    .page.active { display:block; }
+    h2 { margin:0 0 12px; }
+    textarea,input { width:100%; padding:12px; border-radius:12px; border:1px solid var(--line); font:inherit; }
+    textarea { min-height:140px; resize:vertical; }
+    .actions { display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
+    button { padding:10px 14px; border-radius:12px; border:none; cursor:pointer; font:inherit; }
+    .primary { background:var(--brand); color:#fff; }
+    .good { background:#ecfdf5; color:var(--success); }
+    .bad { background:#fef2f2; color:var(--danger); }
+    .secondary { background:#eef2ff; color:#3730a3; }
+    .panel { background:#fafbff; border:1px solid #e8ebf3; border-radius:14px; padding:12px; white-space:pre-wrap; }
+    .bubble { border-radius:14px; padding:10px; margin:6px 0; white-space:pre-wrap; line-height:1.7; }
+    .user { background:#dbeafe; }
+    .assistant { background:#fff; border:1px solid var(--line); }
+    .list { display:flex; flex-direction:column; gap:10px; }
+    .empty { text-align:center; color:var(--muted); padding:20px; }
+    .status { margin-top:10px; color:var(--muted); font-size:14px; line-height:1.6; }
+    .warn { color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:12px; font-size:13px; line-height:1.6; }
+    .meta { margin-top:8px; color:var(--muted); font-size:12px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">情绪管理 AI MVP</div>
+    <div class="sub">最终版：多轮聊天、结束对话后反馈、返回首页、可选同步 Supabase、自动生成匿名 user_id。</div>
+    <div class="nav">
+      <button data-page="homePage">首页</button>
+      <button data-page="resultPage">结果</button>
+      <button data-page="feedbackPage">反馈</button>
+      <button data-page="historyPage">历史</button>
+    </div>
+  </div>
+
+ <div class="card" style="padding:16px">
+  <div class="warn">
+    这是一个情绪陪伴测试版。你的对话会以匿名方式保存，用于改进体验。
+  </div>
+</div>
+
+  <section id="homePage" class="page active">
+    <h2>首页</h2>
+    <textarea id="userInput" placeholder="说点你的情绪…"></textarea>
+    <div class="actions">
+      <button class="primary" id="submitBtn">提交</button>
+    </div>
+    <div id="homeStatus" class="status"></div>
+  </section>
+
+  <section id="resultPage" class="page">
+    <h2>结果页</h2>
+    <div class="panel" id="originalText"></div>
+    <div id="conversationThread" class="list" style="margin-top:12px"></div>
+    <div class="actions">
+      <button class="primary" id="continueChatBtn">继续对话</button>
+      <button class="secondary" id="endChatBtn">结束对话</button>
+    </div>
+    <textarea id="followupInput" placeholder="你还可以继续说下去…" style="margin-top:12px;display:block"></textarea>
+    <div id="feedbackActions" class="actions" style="display:none">
+      <button class="good" id="helpfulBtn">有帮助</button>
+      <button class="bad" id="notHelpfulBtn">没帮助</button>
+    </div>
+    <div id="resultStatus" class="status"></div>
+  </section>
+
+  <section id="feedbackPage" class="page">
+    <h2>反馈记录</h2>
+    <div style="margin-bottom:10px;color:#6b7280;font-size:14px;">谢谢你的反馈，我们会努力做的更好一点点 🫶</div>
+    <div id="feedbackList"></div>
+    <div class="actions" style="margin-top:12px">
+      <button class="primary" id="backHomeFromFeedbackBtn">返回首页</button>
+    </div>
+  </section>
+
+  <section id="historyPage" class="page">
+    <h2>历史记录</h2>
+    <div id="historyList"></div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const DEEPSEEK_API_KEY = "sk-79c78e47d4b24c879727ddfc34823237";
+const SUPABASE_URL = "https://kikzvlvlvuafejfzcjbc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_WsQdzSnaI_D-H8QNt8qX0w_X76iyjar";
+const STORAGE_KEYS = {
+  userId: "emotion_mvp_user_id",
+  history: "emotion_mvp_history",
+  feedback: "emotion_mvp_feedback"
+};
+
+const els = {
+ 
+  userInput: document.getElementById("userInput"),
+  submitBtn: document.getElementById("submitBtn"),
+  homeStatus: document.getElementById("homeStatus"),
+  conversationThread: document.getElementById("conversationThread"),
+  originalText: document.getElementById("originalText"),
+  followupInput: document.getElementById("followupInput"),
+  continueChatBtn: document.getElementById("continueChatBtn"),
+  endChatBtn: document.getElementById("endChatBtn"),
+  helpfulBtn: document.getElementById("helpfulBtn"),
+  notHelpfulBtn: document.getElementById("notHelpfulBtn"),
+  feedbackActions: document.getElementById("feedbackActions"),
+  feedbackList: document.getElementById("feedbackList"),
+  historyList: document.getElementById("historyList"),
+  resultStatus: document.getElementById("resultStatus"),
+  backHomeFromFeedbackBtn: document.getElementById("backHomeFromFeedbackBtn")
+};
+
+let session = null;
+let historyRecords = [];
+let feedbackRecords = [];
+let supabaseClient = null;
+
+function getUserId() {
+  let id = localStorage.getItem(STORAGE_KEYS.userId);
+  if (!id) {
+    id = "user_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem(STORAGE_KEYS.userId, id);
+  }
+  return id;
+}
+
+function showPage(id) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+function saveLocal() {
+  localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(historyRecords));
+  localStorage.setItem(STORAGE_KEYS.feedback, JSON.stringify(feedbackRecords));
+}
+
+function loadLocal() {
+  getUserId();
+  try {
+    historyRecords = JSON.parse(localStorage.getItem(STORAGE_KEYS.history) || "[]") || [];
+  } catch {
+    historyRecords = [];
+  }
+  try {
+    feedbackRecords = JSON.parse(localStorage.getItem(STORAGE_KEYS.feedback) || "[]") || [];
+  } catch {
+    feedbackRecords = [];
+  }
+  initSupabase();
+}
+
+function initSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    supabaseClient = null;
+    console.error("Supabase 配置缺失");
+    return;
+  }
+
+  if (!window.supabase || !window.supabase.createClient) {
+    supabaseClient = null;
+    console.error("Supabase 脚本加载失败");
+    return;
+  }
+
+  try {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log("Supabase 已连接");
+  } catch (e) {
+    supabaseClient = null;
+    console.error("Supabase 初始化失败：", e.message || e);
+  }
+}
+ 
+
+async function upsertConversationToDB(record) {
+  if (!supabaseClient) {
+    console.error("Supabase 未连接");
+    return false;
+  }
+
+  const payload = {
+    user_id: getUserId(),
+    conversation_id: String(record.id),
+    first_user_text: record.messages?.[0]?.content || "",
+    messages: null,
+    ended: !!record.ended,
+    feedback: record.feedback || null,
+    message_count: record.messages?.length || 0,
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await supabaseClient
+    .from("conversations")
+    .upsert(payload, { onConflict: "conversation_id" });
+
+  if (error) {
+    console.error("保存 conversations 失败：", error.message);
+    return false;
+  }
+
+  return true;
+}
+async function insertFeedbackToDB(record, type) {
+  if (!supabaseClient) {
+    console.error("Supabase 未连接");
+    return false;
+  }
+
+  const payload = {
+    user_id: getUserId(),
+    conversation_id: String(record.id),
+    feedback_type: type,
+    first_user_text: record.messages?.[0]?.content || "",
+    messages: record.messages || [],
+    message_count: record.messages?.length || 0
+  };
+
+  const { error } = await supabaseClient
+    .from("feedback_records")
+    .insert(payload);
+
+  if (error) {
+    console.error("保存 feedback_records 失败：", error.message);
+    return false;
+  }
+
+  return true;
+}
+function escapeHtml(str = "") {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function renderThread() {
+  if (!session || !session.messages) {
+    els.conversationThread.innerHTML = '<div class="empty">还没有对话内容</div>';
+    return;
+  }
+  els.conversationThread.innerHTML = session.messages.map(m => `
+    <div class="bubble ${m.role}">
+      <strong>${m.role === "user" ? "你" : "AI"}</strong>
+      <div style="margin-top:6px">${escapeHtml(m.content)}</div>
+    </div>
+  `).join("");
+}
+
+function renderHistory() {
+  els.historyList.innerHTML = historyRecords.length
+    ? historyRecords.slice().reverse().map(item => `
+      <div class="panel">
+        <div><strong>匿名用户 ID：</strong>${escapeHtml(item.user_id || "")}</div>
+        <div class="meta"><strong>首条倾诉：</strong>${escapeHtml(item.messages?.[0]?.content || "")}</div>
+        <div class="meta"><strong>对话轮数：</strong>${item.messages?.length || 0}</div>
+        <div class="meta"><strong>状态：</strong>${item.ended ? "已结束" : "进行中"}</div>
+      </div>
+    `).join("")
+    : '<div class="empty">暂无历史记录</div>';
+}
+
+function renderFeedback() {
+  els.feedbackList.innerHTML = feedbackRecords.length
+    ? feedbackRecords.slice().reverse().map(item => `
+      <div class="panel">
+        <div><strong>反馈：</strong>${item.type === "good" ? "有帮助" : "没帮助"}</div>
+        <div class="meta"><strong>匿名用户 ID：</strong>${escapeHtml(item.user_id || "")}</div>
+        <div class="meta"><strong>首条倾诉：</strong>${escapeHtml(item.messages?.[0]?.content || "")}</div>
+        <div class="meta"><strong>对话轮数：</strong>${item.messages?.length || 0}</div>
+      </div>
+    `).join("")
+    : '<div class="empty">暂无反馈记录</div>';
+}
+
+async function send(msgs) {
+  if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === "REPLACE_WITH_YOUR_DEEPSEEK_API_KEY") {
+    throw new Error("请先把代码里的 DEEPSEEK_API_KEY 改成你自己的 key");
+  }
+
+  const res = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+    },
+    body: JSON.stringify({
+  model: "deepseek-chat",
+  max_tokens: 400,
+      messages: [{
+        role: "system",
+        content: `你是一个普通、有点幽默感的大学生朋友，专门安慰情绪。
+
+回复要求：
+1. 每次字数尽量长（200-400字），像真人聊天，不敷衍。
+2. 口语化，加入语气词：“啊这”、“诶”、“emm…”、“小声说”等。
+3. 分段回复，可加入动作描写
+4. 使用具体生活比喻和细节，增强画面感。
+5. 可以自嘲、幽默，但必须共情用户情绪。
+6. 不要直接否定或说教用户情绪。
+
+
+
+回复结构：
+- 第一段：接住情绪（强共情）
+- 第二段：生活化解释（让用户觉得“正常”）
+- 第三段：轻引导（非常小的动作，不说教）
+- 结尾：留一个可以继续聊的话头
+
+
+在回复结尾，必须加一句轻引导，比如：
+“我们可以先聊到这一步，如果你愿意，可以点一下下面那个反馈按钮，让我知道刚刚有没有帮到你一点点。”
+
+如果用户表达自伤、自杀等风险，要温和建议联系现实支持资源。`
+      }, ...msgs]
+    })
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || data?.message || "请求失败");
+  }
+  return data?.choices?.[0]?.message?.content || "emm…我刚刚有点卡壳了，你再和我说一次，我这次认真接住你。";
+}
+
+
+
+els.submitBtn.onclick = async () => {
+  const text = els.userInput.value.trim().slice(0, 300);
+  if (!text) {
+    els.homeStatus.textContent = "先输入一点内容呀";
+    return;
+  }
+
+  try {
+    els.homeStatus.textContent = "";
+    session = {
+      id: Date.now(),
+      user_id: getUserId(),
+      messages: [{ role: "user", content: text }],
+      ended: false,
+      feedback: null
+    };
+    els.originalText.textContent = text;
+    els.feedbackActions.style.display = "none";
+    els.followupInput.style.display = "block";
+    els.followupInput.value = "";
+    els.resultStatus.textContent = "AI 正在回复你…";
+    showPage("resultPage");
+
+    const reply = await send(session.messages);
+    session.messages.push({ role: "assistant", content: reply });
+    renderThread();
+    els.resultStatus.textContent = "你可以继续聊下去，想结束时再点“结束对话”。";
+
+    const idx = historyRecords.findIndex(item => item.id === session.id);
+    if (idx === -1) historyRecords.push(JSON.parse(JSON.stringify(session)));
+    else historyRecords[idx] = JSON.parse(JSON.stringify(session));
+
+    saveLocal();
+    renderHistory();
+    await upsertConversationToDB(session);
+  } catch (err) {
+    showPage("homePage");
+    els.homeStatus.textContent = err.message || "出错了";
+  }
+};
+
+els.continueChatBtn.onclick = async () => {
+  if (!session || session.ended) {
+    els.resultStatus.textContent = "这轮对话已经结束啦，想继续的话请从首页开启新对话。";
+    return;
+  }
+  const text = els.followupInput.value.trim().slice(0, 300);
+  if (!text) {
+    els.resultStatus.textContent = "你还没输入继续聊的内容哦";
+    return;
+  }
+
+  try {
+    session.messages.push({
+ role:"user",
+ content:text.slice(0,200)
+});
+    els.followupInput.value = "";
+    renderThread();
+    els.resultStatus.textContent = "AI 正在继续接话…";
+
+    const reply = await send(session.messages.slice(-4));
+    session.messages.push({ role: "assistant", content: reply });
+    renderThread();
+    els.resultStatus.textContent = "还可以继续聊，次数不限制。";
+
+    const idx = historyRecords.findIndex(item => item.id === session.id);
+    if (idx === -1) historyRecords.push(JSON.parse(JSON.stringify(session)));
+    else historyRecords[idx] = JSON.parse(JSON.stringify(session));
+
+    saveLocal();
+    renderHistory();
+    await upsertConversationToDB(session);
+  } catch (err) {
+    els.resultStatus.textContent = err.message || "继续对话失败";
+  }
+};
+
+els.endChatBtn.onclick = async () => {
+  if (!session) {
+    els.resultStatus.textContent = "当前还没有可结束的对话";
+    return;
+  }
+  session.ended = true;
+  els.feedbackActions.style.display = "flex";
+  els.followupInput.style.display = "none";
+  els.resultStatus.textContent = "对话已结束，请选择这次回复对你是否有帮助。";
+
+  const idx = historyRecords.findIndex(item => item.id === session.id);
+  if (idx === -1) historyRecords.push(JSON.parse(JSON.stringify(session)));
+  else historyRecords[idx] = JSON.parse(JSON.stringify(session));
+
+  saveLocal();
+  renderHistory();
+  await upsertConversationToDB(session);
+};
+
+els.helpfulBtn.onclick = async () => {
+  if (!session || !session.ended) {
+    els.resultStatus.textContent = "请先结束对话，再提交反馈。";
+    return;
+  }
+  feedbackRecords.push({ ...JSON.parse(JSON.stringify(session)), type: "good", user_id: getUserId() });
+  session.feedback = "good";
+  saveLocal();
+  renderFeedback();
+  await upsertConversationToDB(session);
+  await insertFeedbackToDB(session, "good");
+  showPage("feedbackPage");
+};
+
+els.notHelpfulBtn.onclick = async () => {
+  if (!session || !session.ended) {
+    els.resultStatus.textContent = "请先结束对话，再提交反馈。";
+    return;
+  }
+  feedbackRecords.push({ ...JSON.parse(JSON.stringify(session)), type: "bad", user_id: getUserId() });
+  session.feedback = "bad";
+  saveLocal();
+  renderFeedback();
+  await upsertConversationToDB(session);
+  await insertFeedbackToDB(session, "bad");
+  showPage("feedbackPage");
+};
+
+els.backHomeFromFeedbackBtn.onclick = () => {
+  showPage("homePage");
+};
+
+document.querySelectorAll("[data-page]").forEach(btn => {
+  btn.onclick = () => showPage(btn.dataset.page);
+});
+
+window.addEventListener("error", (e) => {
+  console.error("页面报错：", e.message);
+});
+
+loadLocal();
+renderHistory();
+renderFeedback();
+</script>
+</body>
+</html>
