@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>微光体验反馈</title>
+  <style>
+    :root {
+      --bg:#f5f7fb; --card:#fff; --text:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+      --brand:#4f46e5; --brand-soft:#eef2ff; --success:#166534; --success-bg:#f0fdf4;
+      --shadow:0 12px 28px rgba(15,23,42,.08);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+    .app { width:min(100% - 24px, 680px); margin:0 auto; padding:18px 0 32px; }
+    .topbar,.form-page { background:var(--card); border:1px solid var(--line); border-radius:20px; box-shadow:var(--shadow); }
+    .topbar { padding:18px; margin-bottom:14px; }
+    .title { margin:0; font-size:24px; font-weight:800; }
+    .sub,.hint { color:var(--muted); font-size:14px; line-height:1.6; }
+    .sub { margin:8px 0 0; }
+    .form-page { padding:20px; }
+    fieldset { margin:0; padding:18px 0; border:0; border-bottom:1px solid var(--line); }
+    fieldset:first-child { padding-top:0; }
+    fieldset:last-of-type { border-bottom:0; }
+    legend { width:100%; margin-bottom:10px; padding:0; font-size:16px; font-weight:700; }
+    .options,.score-options { display:flex; gap:8px; flex-wrap:wrap; }
+    .option { position:relative; }
+    .option input { position:absolute; opacity:0; pointer-events:none; }
+    .option span { display:flex; min-height:42px; align-items:center; justify-content:center; padding:9px 13px; border:1px solid var(--line); border-radius:12px; background:#fff; cursor:pointer; }
+    .option input:checked + span { border-color:var(--brand); background:var(--brand-soft); color:#3730a3; font-weight:700; }
+    .score-options .option span { width:42px; padding:9px 0; }
+    textarea { width:100%; min-height:96px; padding:12px; border:1px solid var(--line); border-radius:12px; resize:vertical; font:inherit; line-height:1.6; }
+    textarea:focus { outline:2px solid #c7d2fe; border-color:var(--brand); }
+    .hint { margin:0 0 8px; }
+    .actions { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
+    button,.back-link { min-height:44px; padding:10px 16px; border:0; border-radius:12px; font:inherit; cursor:pointer; text-decoration:none; text-align:center; }
+    button { background:var(--brand); color:#fff; }
+    .back-link { border:1px solid #c7d2fe; background:var(--brand-soft); color:#3730a3; }
+    .success { display:none; padding:16px; border:1px solid #bbf7d0; border-radius:12px; background:var(--success-bg); color:var(--success); line-height:1.7; }
+    .summary { width:100%; min-height:220px; margin-top:12px; background:#fff; color:var(--text); }
+    .copy-status { min-height:22px; margin-top:8px; color:var(--muted); font-size:14px; }
+    @media (max-width:520px) {
+      .app { width:min(100% - 16px, 680px); padding-top:8px; }
+      .form-page { padding:16px; }
+      .score-options { display:grid; grid-template-columns:repeat(5, 1fr); }
+      .score-options .option span { width:100%; }
+      .actions > * { width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <h1 class="title">微光体验反馈</h1>
+      <p class="sub">大约需要 2 分钟。真实感受比“正确答案”更重要。</p>
+    </header>
+
+    <section class="form-page">
+      <form id="feedbackForm">
+        <fieldset>
+          <legend>1. 今天用了几次微光？</legend>
+          <div class="options">
+            <label class="option"><input type="radio" name="usageCount" value="1次" required /><span>1次</span></label>
+            <label class="option"><input type="radio" name="usageCount" value="2-3次" /><span>2-3次</span></label>
+            <label class="option"><input type="radio" name="usageCount" value="4次以上" /><span>4次以上</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>2. AI 是否让你感觉被理解？</legend>
+          <p class="hint">1 分代表完全没有，10 分代表非常强烈。</p>
+          <div class="score-options">
+            <label class="option"><input type="radio" name="understoodScore" value="1" required /><span>1</span></label>
+            <label class="option"><input type="radio" name="understoodScore" value="2" /><span>2</span></label>
+            <label class="option"><input type="radio" name="understoodScore" value="3" /><span>3</span></label>
+            <label class="option"><input type="radio" name="understoodScore" value="4" /><span>4</span></label>
+            <label class="option"><input type="radio" name="understoodScore" value="5" /><span>5</span></label>
+            <label class="option"><input type="radio" name="understoodScore" value="6" /><span>6</span></label>
+            <label class="option"><input type="radio" name="understoodScore" value="7" /><span>7</span></label>
+            <label class="option"><input type="radio" name="understoodScore" value="8" /><span>8</span></label>
+            <label class="option"><input type="radio" name="understoodScore" value="9" /><span>9</span></label>
+            <label class="option"><input type="radio" name="understoodScore" value="10" /><span>10</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>3. 最有帮助的一句话</legend>
+          <p class="hint">有没有一句话让你觉得被理解或被安慰到？</p>
+          <textarea name="helpfulQuote" maxlength="500"></textarea>
+        </fieldset>
+
+        <fieldset>
+          <legend>4. 最出戏的一句话</legend>
+          <p class="hint">有没有一句话让你觉得太 AI、太假或不舒服？</p>
+          <textarea name="awkwardQuote" maxlength="500"></textarea>
+        </fieldset>
+
+        <fieldset>
+          <legend>5. 希望增加什么？</legend>
+          <textarea name="featureRequest" maxlength="1000"></textarea>
+        </fieldset>
+
+        <fieldset>
+          <legend>6. 你愿意再次使用微光吗？</legend>
+          <div class="options">
+            <label class="option"><input type="radio" name="reuseIntent" value="愿意" required /><span>愿意</span></label>
+            <label class="option"><input type="radio" name="reuseIntent" value="不确定" /><span>不确定</span></label>
+            <label class="option"><input type="radio" name="reuseIntent" value="不愿意" /><span>不愿意</span></label>
+          </div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit">提交反馈</button>
+          <a class="back-link" href="/">返回微光</a>
+        </div>
+      </form>
+
+      <div class="success" id="successPanel">
+        <strong>谢谢你认真说真话。</strong>
+        <div>反馈已保存在当前浏览器。请复制下面的内容发给测试负责人。</div>
+        <textarea class="summary" id="feedbackSummary" readonly></textarea>
+        <div class="actions">
+          <button type="button" id="copyBtn">复制反馈</button>
+          <a class="back-link" href="/">返回微光</a>
+        </div>
+        <div class="copy-status" id="copyStatus"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "weiguang_mvp_test_feedback";
+    const form = document.getElementById("feedbackForm");
+    const successPanel = document.getElementById("successPanel");
+    const feedbackSummary = document.getElementById("feedbackSummary");
+    const copyBtn = document.getElementById("copyBtn");
+    const copyStatus = document.getElementById("copyStatus");
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const data = new FormData(form);
+      const feedback = {
+        submittedAt: new Date().toISOString(),
+        userId: localStorage.getItem("emotion_mvp_user_id") || "anonymous",
+        usageCount: data.get("usageCount"),
+        understoodScore: data.get("understoodScore"),
+        helpfulQuote: String(data.get("helpfulQuote") || "").trim(),
+        awkwardQuote: String(data.get("awkwardQuote") || "").trim(),
+        featureRequest: String(data.get("featureRequest") || "").trim(),
+        reuseIntent: data.get("reuseIntent")
+      };
+
+      const records = loadRecords();
+      records.push(feedback);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+
+      feedbackSummary.value = formatFeedback(feedback);
+      form.style.display = "none";
+      successPanel.style.display = "block";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(feedbackSummary.value);
+        copyStatus.textContent = "已复制，可以直接发给测试负责人。";
+      } catch {
+        feedbackSummary.select();
+        copyStatus.textContent = "请长按或手动复制上面的反馈内容。";
+      }
+    });
+
+    function loadRecords() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      } catch {
+        return [];
+      }
+    }
+
+    function formatFeedback(feedback) {
+      return [
+        "微光 MVP 体验反馈",
+        `提交时间：${new Date(feedback.submittedAt).toLocaleString("zh-CN")}`,
+        `匿名用户：${feedback.userId}`,
+        `今天使用次数：${feedback.usageCount}`,
+        `被理解评分：${feedback.understoodScore}/10`,
+        `最有帮助的一句话：${feedback.helpfulQuote || "未填写"}`,
+        `最出戏的一句话：${feedback.awkwardQuote || "未填写"}`,
+        `希望增加什么：${feedback.featureRequest || "未填写"}`,
+        `是否愿意再次使用：${feedback.reuseIntent}`
+      ].join("\n");
+    }
+  </script>
+</body>
+</html>

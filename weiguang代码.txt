@@ -30,6 +30,8 @@
     .good { background:#ecfdf5; color:var(--success); }
     .bad { background:#fef2f2; color:var(--danger); }
     .secondary { background:#eef2ff; color:#3730a3; }
+    .feedback-link { display:block; width:100%; margin-top:14px; padding:11px 14px; border:1px solid #c7d2fe; border-radius:12px; background:var(--brand-soft); color:#3730a3; text-align:center; text-decoration:none; font-size:14px; }
+    .feedback-link:hover { background:#e0e7ff; }
     .panel { background:#fafbff; border:1px solid #e8ebf3; border-radius:14px; padding:12px; white-space:pre-wrap; }
     .bubble { border-radius:14px; padding:10px; margin:6px 0; white-space:pre-wrap; line-height:1.7; }
     .user { background:#dbeafe; }
@@ -83,6 +85,7 @@
       <button class="bad" id="notHelpfulBtn">没帮助</button>
     </div>
     <div id="resultStatus" class="status"></div>
+    <a class="feedback-link" href="/feedback.html">反馈一下刚刚有没有帮到你</a>
   </section>
 
   <section id="feedbackPage" class="page">
