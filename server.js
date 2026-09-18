@@ -9,6 +9,8 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "0.0.0.0";
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const SYSTEM_PROMPT = `你是一个普通、有点幽默感的大学生朋友，专门安慰情绪。
 
@@ -42,6 +44,21 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/api/chat") {
       await handleChat(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/conversations") {
+      await handleConversationSave(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/feedback") {
+      await handleFeedbackSave(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/feedback-records") {
+      await handleFeedbackRecordSave(req, res);
       return;
     }
 
@@ -117,6 +134,110 @@ async function handleChat(req, res) {
   });
 }
 
+async function handleConversationSave(req, res) {
+  let body;
+  try {
+    body = await readJson(req);
+  } catch (error) {
+    sendJson(res, 400, { error: error.message || "请求 JSON 格式错误" });
+    return;
+  }
+
+  const messages = normalizeMessages(body.messages);
+  const conversationId = String(body.conversation_id || body.id || "");
+  if (!conversationId || !body.user_id || !messages.length) {
+    sendJson(res, 400, { error: "conversation_id、user_id 和 messages 不能为空" });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const payload = {
+    user_id: String(body.user_id),
+    conversation_id: conversationId,
+    first_user_text: messages[0]?.content || "",
+    messages,
+    ended: !!body.ended,
+    feedback: body.feedback || null,
+    message_count: messages.length,
+    updated_at: now
+  };
+
+  const result = await upsertSupabase("conversations", payload, "conversation_id");
+  if (!result.ok) {
+    sendJson(res, result.status, { error: result.error });
+    return;
+  }
+
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleFeedbackSave(req, res) {
+  let body;
+  try {
+    body = await readJson(req);
+  } catch (error) {
+    sendJson(res, 400, { error: error.message || "请求 JSON 格式错误" });
+    return;
+  }
+
+  if (!body.usage_count || !body.understood_score || !body.reuse_intent) {
+    sendJson(res, 400, { error: "usage_count、understood_score 和 reuse_intent 不能为空" });
+    return;
+  }
+
+  const payload = {
+    user_id: body.user_id ? String(body.user_id) : "anonymous",
+    submitted_at: body.submitted_at || new Date().toISOString(),
+    usage_count: String(body.usage_count),
+    understood_score: Number(body.understood_score),
+    helpful_quote: body.helpful_quote ? String(body.helpful_quote) : null,
+    awkward_quote: body.awkward_quote ? String(body.awkward_quote) : null,
+    feature_request: body.feature_request ? String(body.feature_request) : null,
+    reuse_intent: String(body.reuse_intent)
+  };
+
+  const result = await insertSupabase("mvp_feedback", payload);
+  if (!result.ok) {
+    sendJson(res, result.status, { error: result.error });
+    return;
+  }
+
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleFeedbackRecordSave(req, res) {
+  let body;
+  try {
+    body = await readJson(req);
+  } catch (error) {
+    sendJson(res, 400, { error: error.message || "请求 JSON 格式错误" });
+    return;
+  }
+
+  if (!body.user_id || !body.conversation_id || !body.feedback_type) {
+    sendJson(res, 400, { error: "user_id、conversation_id 和 feedback_type 不能为空" });
+    return;
+  }
+
+  const messages = normalizeMessages(body.messages);
+  const payload = {
+    user_id: String(body.user_id),
+    conversation_id: String(body.conversation_id),
+    feedback_type: String(body.feedback_type),
+    first_user_text: body.first_user_text ? String(body.first_user_text) : messages[0]?.content || "",
+    messages,
+    message_count: Number(body.message_count || messages.length)
+  };
+
+  const result = await insertSupabase("feedback_records", payload);
+  if (!result.ok) {
+    sendJson(res, result.status, { error: result.error });
+    return;
+  }
+
+  sendJson(res, 200, { ok: true });
+}
+
 function normalizeMessages(messages) {
   if (!Array.isArray(messages)) return [];
 
@@ -148,6 +269,57 @@ function readJson(req) {
     });
     req.on("error", reject);
   });
+}
+
+async function upsertSupabase(table, payload, onConflict) {
+  const query = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : "";
+  return writeSupabase(table, payload, query, "resolution=merge-duplicates");
+}
+
+async function insertSupabase(table, payload) {
+  return writeSupabase(table, payload, "", "return=minimal");
+}
+
+async function writeSupabase(table, payload, query, prefer) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return {
+      ok: false,
+      status: 503,
+      error: "Supabase 环境变量未配置"
+    };
+  }
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${query}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Prefer": prefer
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`Supabase 写入 ${table} 失败：`, text);
+      return {
+        ok: false,
+        status: res.status,
+        error: text || "Supabase 写入失败"
+      };
+    }
+
+    return { ok: true, status: res.status };
+  } catch (error) {
+    console.error(`Supabase 写入 ${table} 异常：`, error.message || error);
+    return {
+      ok: false,
+      status: 500,
+      error: "Supabase 写入异常"
+    };
+  }
 }
 
 async function serveStatic(pathname, res) {

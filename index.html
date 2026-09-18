@@ -58,7 +58,7 @@
 
  <div class="card" style="padding:16px">
   <div class="warn">
-    这是一个情绪陪伴测试版。你的对话会以匿名方式保存，用于改进体验。
+    这是一个情绪陪伴测试版。你的对话和反馈会以匿名方式保存，用于 5 人 × 7 天产品内测和话术改进。
   </div>
 </div>
 
@@ -103,10 +103,7 @@
   </section>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SUPABASE_URL = "https://kikzvlvlvuafejfzcjbc.supabase.co";
-const SUPABASE_KEY = "sb_publishable_WsQdzSnaI_D-H8QNt8qX0w_X76iyjar";
 const STORAGE_KEYS = {
   userId: "emotion_mvp_user_id",
   history: "emotion_mvp_history",
@@ -135,7 +132,6 @@ const els = {
 let session = null;
 let historyRecords = [];
 let feedbackRecords = [];
-let supabaseClient = null;
 
 function getUserId() {
   let id = localStorage.getItem(STORAGE_KEYS.userId);
@@ -168,66 +164,39 @@ function loadLocal() {
   } catch {
     feedbackRecords = [];
   }
-  initSupabase();
-}
-
-function initSupabase() {
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    supabaseClient = null;
-    console.error("Supabase 配置缺失");
-    return;
-  }
-
-  if (!window.supabase || !window.supabase.createClient) {
-    supabaseClient = null;
-    console.error("Supabase 脚本加载失败");
-    return;
-  }
-
-  try {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    console.log("Supabase 已连接");
-  } catch (e) {
-    supabaseClient = null;
-    console.error("Supabase 初始化失败：", e.message || e);
-  }
 }
  
 
 async function upsertConversationToDB(record) {
-  if (!supabaseClient) {
-    console.error("Supabase 未连接");
-    return false;
-  }
-
   const payload = {
     user_id: getUserId(),
     conversation_id: String(record.id),
     first_user_text: record.messages?.[0]?.content || "",
-    messages: null,
+    messages: record.messages || [],
     ended: !!record.ended,
     feedback: record.feedback || null,
     message_count: record.messages?.length || 0,
     updated_at: new Date().toISOString()
   };
 
-  const { error } = await supabaseClient
-    .from("conversations")
-    .upsert(payload, { onConflict: "conversation_id" });
-
-  if (error) {
-    console.error("保存 conversations 失败：", error.message);
+  try {
+    const res = await fetch("/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error("保存 conversations 失败：", data.error || res.statusText);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("保存 conversations 异常：", error.message || error);
     return false;
   }
-
-  return true;
 }
 async function insertFeedbackToDB(record, type) {
-  if (!supabaseClient) {
-    console.error("Supabase 未连接");
-    return false;
-  }
-
   const payload = {
     user_id: getUserId(),
     conversation_id: String(record.id),
@@ -237,16 +206,22 @@ async function insertFeedbackToDB(record, type) {
     message_count: record.messages?.length || 0
   };
 
-  const { error } = await supabaseClient
-    .from("feedback_records")
-    .insert(payload);
-
-  if (error) {
-    console.error("保存 feedback_records 失败：", error.message);
+  try {
+    const res = await fetch("/api/feedback-records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error("保存 feedback_records 失败：", data.error || res.statusText);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("保存 feedback_records 异常：", error.message || error);
     return false;
   }
-
-  return true;
 }
 function escapeHtml(str = "") {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

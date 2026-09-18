@@ -52,7 +52,7 @@
   <main class="app">
     <header class="topbar">
       <h1 class="title">微光体验反馈</h1>
-      <p class="sub">大约需要 2 分钟。真实感受比“正确答案”更重要。</p>
+      <p class="sub">大约需要 2 分钟。你的反馈会以匿名方式保存，用于 5 人 × 7 天产品内测和话术改进。</p>
     </header>
 
     <section class="form-page">
@@ -117,7 +117,7 @@
 
       <div class="success" id="successPanel">
         <strong>谢谢你认真说真话。</strong>
-        <div>反馈已保存在当前浏览器。请复制下面的内容发给测试负责人。</div>
+        <div id="submitResult">反馈已保存。请复制下面的内容作为备份。</div>
         <textarea class="summary" id="feedbackSummary" readonly></textarea>
         <div class="actions">
           <button type="button" id="copyBtn">复制反馈</button>
@@ -136,7 +136,9 @@
     const copyBtn = document.getElementById("copyBtn");
     const copyStatus = document.getElementById("copyStatus");
 
-    form.addEventListener("submit", (event) => {
+    const submitResult = document.getElementById("submitResult");
+
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
 
       const data = new FormData(form);
@@ -155,7 +157,12 @@
       records.push(feedback);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
 
+      const savedToSupabase = await saveFeedbackToServer(feedback);
+
       feedbackSummary.value = formatFeedback(feedback);
+      submitResult.textContent = savedToSupabase
+        ? "反馈已保存到测试数据库。请复制下面的内容作为备份。"
+        : "反馈已保存在当前浏览器，但暂时没有同步到测试数据库。请复制下面的内容发给测试负责人。";
       form.style.display = "none";
       successPanel.style.display = "block";
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -176,6 +183,34 @@
         return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
       } catch {
         return [];
+      }
+    }
+
+    async function saveFeedbackToServer(feedback) {
+      try {
+        const res = await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: feedback.userId,
+            submitted_at: feedback.submittedAt,
+            usage_count: feedback.usageCount,
+            understood_score: feedback.understoodScore,
+            helpful_quote: feedback.helpfulQuote,
+            awkward_quote: feedback.awkwardQuote,
+            feature_request: feedback.featureRequest,
+            reuse_intent: feedback.reuseIntent
+          })
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          console.error("反馈同步失败：", data.error || res.statusText);
+          return false;
+        }
+        return true;
+      } catch (error) {
+        console.error("反馈同步异常：", error.message || error);
+        return false;
       }
     }
 
